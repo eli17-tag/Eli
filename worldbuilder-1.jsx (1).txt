@@ -1,0 +1,1580 @@
+import React, { useState, useEffect } from 'react';
+import { Menu, X, Heart, Star, Search, Plus, Edit2, Trash2, LogOut, User, Settings, ChevronDown, Home, Globe, BookOpen, MapPin, Users, Clock, Castle, Zap } from 'lucide-react';
+
+// ============================================================================
+// DATA MANAGEMENT & STORAGE
+// ============================================================================
+
+const initializeStorage = () => {
+  if (typeof window === 'undefined') return;
+  
+  // Check if data exists
+  if (!localStorage.getItem('worldbuilder_users')) {
+    localStorage.setItem('worldbuilder_users', JSON.stringify({
+      user1: {
+        id: 'user1',
+        username: 'CreatorMaster',
+        email: 'creator@example.com',
+        password: 'password123',
+        bio: 'Passionate worldbuilder and storyteller',
+        avatar: '👤',
+        joinDate: new Date('2024-01-15').toISOString(),
+      }
+    }));
+  }
+
+  if (!localStorage.getItem('worldbuilder_worlds')) {
+    localStorage.setItem('worldbuilder_worlds', JSON.stringify({
+      world1: {
+        id: 'world1',
+        name: 'The Shattered Realms',
+        description: 'A post-apocalyptic world where magic has returned after centuries of silence.',
+        genre: 'Fantasy',
+        coverImage: '🌍',
+        creator: 'user1',
+        createdDate: new Date().toISOString(),
+        isPublic: true,
+        ratings: [],
+        followers: 0,
+        views: 142,
+        factions: [
+          { id: 'f1', name: 'The Starborn Council', leader: 'Aelindor', description: 'Ancient mages seeking balance' }
+        ],
+        characters: [
+          { id: 'c1', name: 'Kael Darkbinder', role: 'Protagonist', description: 'A young mage discovering ancient powers' }
+        ],
+        locations: [
+          { id: 'l1', name: 'Crystalline Spires', type: 'City', description: 'The last major settlement of humanity' }
+        ],
+        timeline: [
+          { id: 't1', date: '1000 years ago', name: 'The Silence', description: 'Magic vanishes from the world' }
+        ],
+        mapImage: null,
+      }
+    }));
+  }
+
+  if (!localStorage.getItem('worldbuilder_currentUser')) {
+    localStorage.setItem('worldbuilder_currentUser', JSON.stringify(null));
+  }
+};
+
+// ============================================================================
+// MAIN APP COMPONENT
+// ============================================================================
+
+export default function WorldBuilder() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentPage, setCurrentPage] = useState('landing');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showToast, setShowToast] = useState(null);
+  const [worlds, setWorlds] = useState({});
+  const [users, setUsers] = useState({});
+
+  useEffect(() => {
+    initializeStorage();
+    const stored = localStorage.getItem('worldbuilder_currentUser');
+    if (stored) {
+      setCurrentUser(JSON.parse(stored));
+      setCurrentPage('dashboard');
+    }
+    setWorlds(JSON.parse(localStorage.getItem('worldbuilder_worlds') || '{}'));
+    setUsers(JSON.parse(localStorage.getItem('worldbuilder_users') || '{}'));
+  }, []);
+
+  const showNotification = (message, type = 'success') => {
+    setShowToast({ message, type });
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleLogin = (email, password) => {
+    const user = Object.values(users).find(u => u.email === email && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      localStorage.setItem('worldbuilder_currentUser', JSON.stringify(user));
+      setCurrentPage('dashboard');
+      showNotification('Welcome back!');
+    } else {
+      showNotification('Invalid email or password', 'error');
+    }
+  };
+
+  const handleSignUp = (email, password, username) => {
+    if (Object.values(users).some(u => u.email === email)) {
+      showNotification('Email already registered', 'error');
+      return;
+    }
+    const newUser = {
+      id: 'user_' + Date.now(),
+      username,
+      email,
+      password,
+      bio: '',
+      avatar: '👤',
+      joinDate: new Date().toISOString(),
+    };
+    const updatedUsers = { ...users, [newUser.id]: newUser };
+    setUsers(updatedUsers);
+    localStorage.setItem('worldbuilder_users', JSON.stringify(updatedUsers));
+    setCurrentUser(newUser);
+    localStorage.setItem('worldbuilder_currentUser', JSON.stringify(newUser));
+    setCurrentPage('dashboard');
+    showNotification('Account created successfully!');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.setItem('worldbuilder_currentUser', JSON.stringify(null));
+    setCurrentPage('landing');
+    showNotification('Logged out successfully');
+  };
+
+  const handleCreateWorld = (worldData) => {
+    const newWorld = {
+      id: 'world_' + Date.now(),
+      ...worldData,
+      creator: currentUser.id,
+      createdDate: new Date().toISOString(),
+      ratings: [],
+      followers: 0,
+      views: 0,
+      factions: [],
+      characters: [],
+      locations: [],
+      timeline: [],
+      mapImage: null,
+    };
+    const updatedWorlds = { ...worlds, [newWorld.id]: newWorld };
+    setWorlds(updatedWorlds);
+    localStorage.setItem('worldbuilder_worlds', JSON.stringify(updatedWorlds));
+    setCurrentPage('world_detail');
+    localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(newWorld));
+    showNotification('World created successfully!');
+  };
+
+  const handleUpdateWorld = (worldId, updates) => {
+    const world = worlds[worldId];
+    const updated = { ...world, ...updates };
+    const updatedWorlds = { ...worlds, [worldId]: updated };
+    setWorlds(updatedWorlds);
+    localStorage.setItem('worldbuilder_worlds', JSON.stringify(updatedWorlds));
+    localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(updated));
+    showNotification('World updated successfully!');
+  };
+
+  const handleDeleteWorld = (worldId) => {
+    const updatedWorlds = { ...worlds };
+    delete updatedWorlds[worldId];
+    setWorlds(updatedWorlds);
+    localStorage.setItem('worldbuilder_worlds', JSON.stringify(updatedWorlds));
+    setCurrentPage('dashboard');
+    showNotification('World deleted successfully!');
+  };
+
+  const handleAddComponent = (worldId, componentType, componentData) => {
+    const world = worlds[worldId];
+    const newId = componentType + '_' + Date.now();
+    const updated = {
+      ...world,
+      [componentType]: [...(world[componentType] || []), { id: newId, ...componentData }]
+    };
+    handleUpdateWorld(worldId, updated);
+    showNotification(`${componentType.charAt(0).toUpperCase() + componentType.slice(1).slice(0, -1)} added!`);
+  };
+
+  const handleRateWorld = (worldId, rating, comment = '') => {
+    const world = worlds[worldId];
+    const newRating = {
+      userId: currentUser.id,
+      rating,
+      comment,
+      date: new Date().toISOString(),
+    };
+    const updated = {
+      ...world,
+      ratings: [...world.ratings, newRating],
+    };
+    handleUpdateWorld(worldId, updated);
+    showNotification('Rating submitted!');
+  };
+
+  // ========================================================================
+  // RENDER PAGES
+  // ========================================================================
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white font-sans">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital@0;1&family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+          --color-primary: #e7d5c8;
+          --color-accent: #d4af37;
+          --color-dark: #1a1625;
+          --color-surface: #2a2435;
+        }
+
+        * {
+          font-family: 'Inter', sans-serif;
+        }
+
+        h1, h2, h3 {
+          font-family: 'Playfair Display', serif;
+          letter-spacing: -0.02em;
+        }
+
+        .display-font {
+          font-family: 'Playfair Display', serif;
+        }
+
+        body-text {
+          font-family: 'Crimson Text', serif;
+          font-size: 1.1rem;
+        }
+
+        .gradient-text {
+          background: linear-gradient(135deg, #e7d5c8, #d4af37);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .card-hover {
+          transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 20px 40px rgba(212, 175, 55, 0.2);
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, #d4af37, #e7d5c8);
+          color: #1a1625;
+          transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(212, 175, 55, 0.3);
+        }
+
+        .fade-in {
+          animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .input-field {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(212, 175, 55, 0.3);
+          backdrop-filter: blur(10px);
+          transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: #d4af37;
+          box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+        }
+
+        .toast {
+          animation: slideUp 0.4s ease;
+        }
+
+        @keyframes slideUp {
+          from {
+            transform: translateY(100px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
+
+      {/* Navigation */}
+      <Navigation
+        currentUser={currentUser}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        onLogout={handleLogout}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className={`fixed bottom-6 right-6 p-4 rounded-lg backdrop-blur-md toast z-50 ${
+          showToast.type === 'success'
+            ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-200'
+            : 'bg-red-500/20 border border-red-400/50 text-red-200'
+        }`}>
+          {showToast.message}
+        </div>
+      )}
+
+      {/* Page Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
+        {!currentUser ? (
+          <>
+            {currentPage === 'landing' && (
+              <LandingPage setCurrentPage={setCurrentPage} />
+            )}
+            {currentPage === 'login' && (
+              <LoginPage onLogin={handleLogin} setCurrentPage={setCurrentPage} />
+            )}
+            {currentPage === 'signup' && (
+              <SignUpPage onSignUp={handleSignUp} setCurrentPage={setCurrentPage} />
+            )}
+          </>
+        ) : (
+          <>
+            {currentPage === 'dashboard' && (
+              <Dashboard
+                user={currentUser}
+                worlds={worlds}
+                setCurrentPage={setCurrentPage}
+                onDeleteWorld={handleDeleteWorld}
+              />
+            )}
+            {currentPage === 'create_world' && (
+              <CreateWorldPage
+                onCreateWorld={handleCreateWorld}
+                setCurrentPage={setCurrentPage}
+              />
+            )}
+            {currentPage === 'browse' && (
+              <BrowsePage
+                worlds={worlds}
+                users={users}
+                setCurrentPage={setCurrentPage}
+              />
+            )}
+            {currentPage === 'world_detail' && (
+              <WorldDetailPage
+                worlds={worlds}
+                users={users}
+                currentUser={currentUser}
+                setCurrentPage={setCurrentPage}
+                onUpdateWorld={handleUpdateWorld}
+                onAddComponent={handleAddComponent}
+                onRateWorld={handleRateWorld}
+              />
+            )}
+            {currentPage === 'profile' && (
+              <ProfilePage
+                user={currentUser}
+                worlds={worlds}
+                setCurrentUser={setCurrentUser}
+                setCurrentPage={setCurrentPage}
+              />
+            )}
+            {currentPage === 'settings' && (
+              <SettingsPage
+                user={currentUser}
+                setCurrentUser={setCurrentUser}
+                setCurrentPage={setCurrentPage}
+                onLogout={handleLogout}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// NAVIGATION COMPONENT
+// ============================================================================
+
+function Navigation({ currentUser, currentPage, setCurrentPage, onLogout, mobileMenuOpen, setMobileMenuOpen }) {
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-40 border-b border-amber-400/10 bg-gradient-to-b from-slate-950 to-slate-950/80 backdrop-blur-md">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <div
+            className="flex items-center cursor-pointer gap-2"
+            onClick={() => {
+              setCurrentPage(currentUser ? 'dashboard' : 'landing');
+              setMobileMenuOpen(false);
+            }}
+          >
+            <Globe className="w-7 h-7 text-amber-400" />
+            <span className="text-xl font-bold display-font gradient-text hidden sm:inline">
+              WorldBuilder
+            </span>
+          </div>
+
+          {currentUser && (
+            <div className="hidden md:flex items-center gap-8">
+              <button
+                onClick={() => setCurrentPage('dashboard')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                  currentPage === 'dashboard'
+                    ? 'bg-amber-400/20 text-amber-400'
+                    : 'hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                <Home className="w-4 h-4" />
+                Dashboard
+              </button>
+              <button
+                onClick={() => setCurrentPage('browse')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                  currentPage === 'browse'
+                    ? 'bg-amber-400/20 text-amber-400'
+                    : 'hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                Explore
+              </button>
+              <button
+                onClick={() => setCurrentPage('profile')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                  currentPage === 'profile'
+                    ? 'bg-amber-400/20 text-amber-400'
+                    : 'hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                Profile
+              </button>
+            </div>
+          )}
+
+          {currentUser && (
+            <div className="hidden md:flex items-center gap-4">
+              <button
+                onClick={() => setCurrentPage('settings')}
+                className="p-2 hover:bg-slate-800 rounded-lg transition"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  onLogout();
+                  setMobileMenuOpen(false);
+                }}
+                className="p-2 hover:bg-slate-800 rounded-lg transition"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+
+          {currentUser && (
+            <button
+              className="md:hidden p-2"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          )}
+        </div>
+
+        {currentUser && mobileMenuOpen && (
+          <div className="md:hidden pb-4 border-t border-amber-400/10 pt-4 space-y-2 fade-in">
+            <button
+              onClick={() => {
+                setCurrentPage('dashboard');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-800 rounded-lg"
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => {
+                setCurrentPage('browse');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-800 rounded-lg"
+            >
+              Explore Worlds
+            </button>
+            <button
+              onClick={() => {
+                setCurrentPage('profile');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-800 rounded-lg"
+            >
+              Profile
+            </button>
+            <button
+              onClick={() => {
+                setCurrentPage('settings');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-800 rounded-lg"
+            >
+              Settings
+            </button>
+            <button
+              onClick={() => {
+                onLogout();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-red-500/10 rounded-lg text-red-400"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+// ============================================================================
+// LANDING PAGE
+// ============================================================================
+
+function LandingPage({ setCurrentPage }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center text-center space-y-8 fade-in">
+      <div className="space-y-4">
+        <h1 className="text-6xl md:text-7xl font-bold display-font">
+          Welcome to <span className="gradient-text">WorldBuilder</span>
+        </h1>
+        <p className="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto">
+          Collaborate with creators worldwide to build extraordinary fictional universes
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-12 w-full max-w-4xl">
+        {[
+          { icon: '✨', title: 'Create Worlds', desc: 'Build immersive universes with factions, characters, and locations' },
+          { icon: '👥', title: 'Collaborate', desc: 'Work with other writers and game developers on shared projects' },
+          { icon: '🌍', title: 'Discover', desc: 'Explore thousands of worlds from creators around the globe' },
+        ].map((item, i) => (
+          <div key={i} className="p-6 rounded-xl bg-slate-800/50 border border-amber-400/20 card-hover">
+            <div className="text-4xl mb-3">{item.icon}</div>
+            <h3 className="text-lg font-bold mb-2">{item.title}</h3>
+            <p className="text-slate-400 text-sm">{item.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4">
+        <button
+          onClick={() => setCurrentPage('login')}
+          className="px-8 py-3 btn-primary font-bold rounded-lg"
+        >
+          Login
+        </button>
+        <button
+          onClick={() => setCurrentPage('signup')}
+          className="px-8 py-3 border border-amber-400 text-amber-400 hover:bg-amber-400/10 font-bold rounded-lg transition"
+        >
+          Create Account
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// LOGIN PAGE
+// ============================================================================
+
+function LoginPage({ onLogin, setCurrentPage }) {
+  const [email, setEmail] = useState('creator@example.com');
+  const [password, setPassword] = useState('password123');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onLogin(email, password);
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen fade-in">
+      <div className="w-full max-w-md">
+        <div className="p-8 rounded-2xl bg-slate-800/50 border border-amber-400/20 backdrop-blur-lg">
+          <h2 className="text-3xl font-bold display-font mb-2">Welcome Back</h2>
+          <p className="text-slate-400 mb-8">Sign in to continue your worldbuilding journey</p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 btn-primary font-bold rounded-lg mt-6"
+            >
+              Login
+            </button>
+          </form>
+
+          <p className="text-center text-slate-400 mt-6">
+            Don't have an account?{' '}
+            <button
+              onClick={() => setCurrentPage('signup')}
+              className="text-amber-400 hover:underline font-medium"
+            >
+              Sign up
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SIGNUP PAGE
+// ============================================================================
+
+function SignUpPage({ onSignUp, setCurrentPage }) {
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      alert('Passwords do not match!');
+      return;
+    }
+    onSignUp(email, password, username);
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen fade-in">
+      <div className="w-full max-w-md">
+        <div className="p-8 rounded-2xl bg-slate-800/50 border border-amber-400/20 backdrop-blur-lg">
+          <h2 className="text-3xl font-bold display-font mb-2">Create Account</h2>
+          <p className="text-slate-400 mb-8">Join the worldbuilding community</p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+                placeholder="CreativeGenius"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 btn-primary font-bold rounded-lg mt-6"
+            >
+              Create Account
+            </button>
+          </form>
+
+          <p className="text-center text-slate-400 mt-6">
+            Already have an account?{' '}
+            <button
+              onClick={() => setCurrentPage('login')}
+              className="text-amber-400 hover:underline font-medium"
+            >
+              Login
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// DASHBOARD PAGE
+// ============================================================================
+
+function Dashboard({ user, worlds, setCurrentPage, onDeleteWorld }) {
+  const userWorlds = Object.values(worlds).filter(w => w.creator === user.id);
+
+  return (
+    <div className="space-y-12 fade-in">
+      <div className="space-y-4">
+        <h1 className="text-5xl font-bold display-font">Welcome, {user.username}</h1>
+        <p className="text-xl text-slate-400">Continue crafting your universes</p>
+      </div>
+
+      <button
+        onClick={() => setCurrentPage('create_world')}
+        className="px-8 py-4 btn-primary font-bold rounded-lg flex items-center gap-3 text-lg group"
+      >
+        <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+        Create New World
+      </button>
+
+      <div>
+        <h2 className="text-3xl font-bold display-font mb-8">My Worlds</h2>
+        {userWorlds.length === 0 ? (
+          <div className="text-center py-16 text-slate-400">
+            <p className="text-xl">No worlds yet. Create your first one!</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {userWorlds.map(world => (
+              <WorldCard
+                key={world.id}
+                world={world}
+                onView={() => {
+                  localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(world));
+                  setCurrentPage('world_detail');
+                }}
+                onEdit={() => {
+                  localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(world));
+                  setCurrentPage('create_world');
+                }}
+                onDelete={() => {
+                  if (confirm('Are you sure you want to delete this world?')) {
+                    onDeleteWorld(world.id);
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CREATE/EDIT WORLD PAGE
+// ============================================================================
+
+function CreateWorldPage({ onCreateWorld, setCurrentPage }) {
+  const [formData, setFormData] = useState(() => {
+    const stored = localStorage.getItem('worldbuilder_currentWorld');
+    return stored
+      ? JSON.parse(stored)
+      : { name: '', description: '', genre: 'Fantasy', coverImage: '', isPublic: true };
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.name.trim()) {
+      alert('World name is required');
+      return;
+    }
+    onCreateWorld({
+      name: formData.name,
+      description: formData.description,
+      genre: formData.genre,
+      coverImage: formData.coverImage || '🌍',
+      isPublic: formData.isPublic,
+    });
+    localStorage.removeItem('worldbuilder_currentWorld');
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto fade-in">
+      <h1 className="text-4xl font-bold display-font mb-8">Create Your World</h1>
+
+      <form onSubmit={handleSubmit} className="space-y-6 bg-slate-800/50 p-8 rounded-2xl border border-amber-400/20">
+        <div>
+          <label className="block text-lg font-bold mb-3">World Name</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+            placeholder="e.g., The Shattered Realms"
+          />
+        </div>
+
+        <div>
+          <label className="block text-lg font-bold mb-3">Description</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500 h-32 resize-none"
+            placeholder="Describe your world..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-lg font-bold mb-3">Genre</label>
+          <select
+            value={formData.genre}
+            onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg input-field text-white"
+          >
+            <option value="Fantasy">Fantasy</option>
+            <option value="Sci-Fi">Sci-Fi</option>
+            <option value="Urban Fantasy">Urban Fantasy</option>
+            <option value="Horror">Horror</option>
+            <option value="Historical">Historical</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-lg font-bold mb-3">Cover Emoji</label>
+          <input
+            type="text"
+            value={formData.coverImage}
+            onChange={(e) => setFormData({ ...formData, coverImage: e.target.value })}
+            maxLength="2"
+            className="w-full px-4 py-3 rounded-lg input-field text-white text-2xl text-center"
+            placeholder="🌍"
+          />
+        </div>
+
+        <div className="flex items-center gap-4">
+          <input
+            type="checkbox"
+            id="public"
+            checked={formData.isPublic}
+            onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+            className="w-5 h-5"
+          />
+          <label htmlFor="public" className="text-lg">
+            Make this world public (visible to other users)
+          </label>
+        </div>
+
+        <div className="flex gap-4 pt-6">
+          <button
+            type="submit"
+            className="flex-1 py-3 btn-primary font-bold rounded-lg"
+          >
+            Save World
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem('worldbuilder_currentWorld');
+              setCurrentPage('dashboard');
+            }}
+            className="flex-1 py-3 border border-amber-400 text-amber-400 hover:bg-amber-400/10 font-bold rounded-lg transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ============================================================================
+// WORLD DETAIL PAGE
+// ============================================================================
+
+function WorldDetailPage({ worlds, users, currentUser, setCurrentPage, onUpdateWorld, onAddComponent, onRateWorld }) {
+  const stored = localStorage.getItem('worldbuilder_currentWorld');
+  const world = stored ? JSON.parse(stored) : null;
+  const [activeTab, setActiveTab] = useState('factions');
+  const [newComponent, setNewComponent] = useState({});
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+
+  if (!world) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl text-slate-400">World not found</p>
+        <button
+          onClick={() => setCurrentPage('dashboard')}
+          className="mt-4 px-6 py-2 btn-primary rounded-lg"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  const creator = users[world.creator];
+  const avgRating = world.ratings.length > 0
+    ? (world.ratings.reduce((sum, r) => sum + r.rating, 0) / world.ratings.length).toFixed(1)
+    : 0;
+
+  const handleAddComponent = (type) => {
+    const data = newComponent[type] || {};
+    if (!data.name && !data.date) return;
+    onAddComponent(world.id, type, data);
+    setNewComponent({ ...newComponent, [type]: {} });
+  };
+
+  const tabs = [
+    { id: 'factions', label: 'Factions', icon: Users, key: 'factions' },
+    { id: 'characters', label: 'Characters', icon: User, key: 'characters' },
+    { id: 'locations', label: 'Locations', icon: MapPin, key: 'locations' },
+    { id: 'timeline', label: 'Timeline', icon: Clock, key: 'timeline' },
+    { id: 'map', label: 'Map', icon: Globe, key: 'mapImage' },
+  ];
+
+  return (
+    <div className="space-y-8 fade-in">
+      {/* Header */}
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-6xl">{world.coverImage}</span>
+              <div>
+                <h1 className="text-5xl font-bold display-font">{world.name}</h1>
+                <p className="text-slate-400 mt-2">
+                  by <span className="text-amber-400">{creator?.username}</span>
+                </p>
+              </div>
+            </div>
+            <p className="text-slate-300 text-lg max-w-2xl">{world.description}</p>
+          </div>
+
+          {world.creator === currentUser.id && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(world));
+                  setCurrentPage('create_world');
+                }}
+                className="p-3 bg-amber-400/20 hover:bg-amber-400/30 rounded-lg transition"
+              >
+                <Edit2 className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-6 text-slate-400">
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-amber-400/20 text-amber-400 rounded-full text-sm font-medium">
+              {world.genre}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+            <span>
+              {avgRating > 0 ? `${avgRating}/5 (${world.ratings.length} ratings)` : 'Not rated yet'}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowRatingModal(true)}
+            className="px-4 py-2 bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 rounded-lg transition flex items-center gap-2"
+          >
+            <Heart className="w-4 h-4" />
+            Rate
+          </button>
+        </div>
+      </div>
+
+      {/* Rating Modal */}
+      {showRatingModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-2xl p-8 max-w-sm w-full border border-amber-400/20">
+            <h3 className="text-2xl font-bold display-font mb-6">Rate This World</h3>
+            <div className="flex justify-center gap-3 mb-6">
+              {[1, 2, 3, 4, 5].map(i => (
+                <button
+                  key={i}
+                  onClick={() => setRating(i)}
+                  className="transition transform hover:scale-110"
+                >
+                  <Star
+                    className={`w-8 h-8 ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-slate-600'}`}
+                  />
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg input-field text-white placeholder-slate-500 mb-4 h-20 resize-none"
+              placeholder="Share your thoughts (optional)..."
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  onRateWorld(world.id, rating, comment);
+                  setShowRatingModal(false);
+                  setRating(5);
+                  setComment('');
+                }}
+                className="flex-1 py-2 btn-primary rounded-lg font-bold"
+              >
+                Submit Rating
+              </button>
+              <button
+                onClick={() => setShowRatingModal(false)}
+                className="flex-1 py-2 border border-slate-600 rounded-lg hover:bg-slate-700 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="border-b border-amber-400/20">
+        <div className="flex overflow-x-auto gap-2">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-6 py-4 font-medium transition whitespace-nowrap border-b-2 ${
+                  activeTab === tab.id
+                    ? 'border-amber-400 text-amber-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div className="space-y-6">
+        {activeTab === 'factions' && (
+          <ComponentSection
+            title="Factions"
+            items={world.factions || []}
+            newItem={newComponent.factions}
+            setNewItem={(val) => setNewComponent({ ...newComponent, factions: val })}
+            fields={[
+              { key: 'name', label: 'Faction Name', placeholder: 'e.g., The Starborn Council' },
+              { key: 'leader', label: 'Leader', placeholder: 'e.g., Aelindor' },
+              { key: 'description', label: 'Description', placeholder: 'What does this faction do?' },
+            ]}
+            onAdd={() => handleAddComponent('factions')}
+            renderItem={(item) => (
+              <div className="space-y-2">
+                <h4 className="font-bold text-lg">{item.name}</h4>
+                <p className="text-amber-400">Leader: {item.leader}</p>
+                <p className="text-slate-400">{item.description}</p>
+              </div>
+            )}
+          />
+        )}
+
+        {activeTab === 'characters' && (
+          <ComponentSection
+            title="Characters"
+            items={world.characters || []}
+            newItem={newComponent.characters}
+            setNewItem={(val) => setNewComponent({ ...newComponent, characters: val })}
+            fields={[
+              { key: 'name', label: 'Character Name', placeholder: 'e.g., Kael Darkbinder' },
+              { key: 'role', label: 'Role', placeholder: 'e.g., Protagonist, Antagonist' },
+              { key: 'description', label: 'Description', placeholder: 'Who is this character?' },
+            ]}
+            onAdd={() => handleAddComponent('characters')}
+            renderItem={(item) => (
+              <div className="space-y-2">
+                <h4 className="font-bold text-lg">{item.name}</h4>
+                <p className="text-amber-400">Role: {item.role}</p>
+                <p className="text-slate-400">{item.description}</p>
+              </div>
+            )}
+          />
+        )}
+
+        {activeTab === 'locations' && (
+          <ComponentSection
+            title="Locations"
+            items={world.locations || []}
+            newItem={newComponent.locations}
+            setNewItem={(val) => setNewComponent({ ...newComponent, locations: val })}
+            fields={[
+              { key: 'name', label: 'Location Name', placeholder: 'e.g., Crystalline Spires' },
+              { key: 'type', label: 'Type', placeholder: 'e.g., City, Dungeon, Forest' },
+              { key: 'description', label: 'Description', placeholder: 'Describe this location' },
+            ]}
+            onAdd={() => handleAddComponent('locations')}
+            renderItem={(item) => (
+              <div className="space-y-2">
+                <h4 className="font-bold text-lg">{item.name}</h4>
+                <p className="text-amber-400">Type: {item.type}</p>
+                <p className="text-slate-400">{item.description}</p>
+              </div>
+            )}
+          />
+        )}
+
+        {activeTab === 'timeline' && (
+          <ComponentSection
+            title="Timeline Events"
+            items={world.timeline || []}
+            newItem={newComponent.timeline}
+            setNewItem={(val) => setNewComponent({ ...newComponent, timeline: val })}
+            fields={[
+              { key: 'date', label: 'Date', placeholder: 'e.g., 1000 years ago' },
+              { key: 'name', label: 'Event Name', placeholder: 'e.g., The Silence' },
+              { key: 'description', label: 'Description', placeholder: 'What happened?' },
+            ]}
+            onAdd={() => handleAddComponent('timeline')}
+            renderItem={(item) => (
+              <div className="space-y-2">
+                <h4 className="font-bold text-lg">{item.name}</h4>
+                <p className="text-amber-400">{item.date}</p>
+                <p className="text-slate-400">{item.description}</p>
+              </div>
+            )}
+          />
+        )}
+
+        {activeTab === 'map' && (
+          <div>
+            <h2 className="text-3xl font-bold display-font mb-6">World Map</h2>
+            {world.mapImage ? (
+              <div className="w-full h-96 bg-slate-800/50 rounded-xl border border-amber-400/20 flex items-center justify-center text-2xl">
+                {world.mapImage}
+              </div>
+            ) : (
+              <div className="w-full h-96 bg-slate-800/50 rounded-xl border-2 border-dashed border-amber-400/30 flex flex-col items-center justify-center text-slate-400 gap-4">
+                <MapPin className="w-12 h-12" />
+                <p>No map uploaded yet</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ComponentSection({ title, items, newItem = {}, setNewItem, fields, onAdd, renderItem }) {
+  return (
+    <div>
+      <h2 className="text-3xl font-bold display-font mb-6">{title}</h2>
+
+      <div className="space-y-6">
+        {/* Existing Items */}
+        {items.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {items.map(item => (
+              <div key={item.id} className="p-6 rounded-xl bg-slate-800/50 border border-amber-400/20 hover:border-amber-400/50 transition">
+                {renderItem(item)}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add New Component Form */}
+        <div className="p-6 rounded-xl bg-slate-800/30 border border-amber-400/20">
+          <h3 className="font-bold text-lg mb-4">Add {title.slice(0, -1)}</h3>
+          <div className="space-y-3">
+            {fields.map(field => (
+              <input
+                key={field.key}
+                type="text"
+                value={newItem[field.key] || ''}
+                onChange={(e) => setNewItem({ ...newItem, [field.key]: e.target.value })}
+                placeholder={field.placeholder}
+                className="w-full px-4 py-2 rounded-lg input-field text-white text-sm placeholder-slate-500"
+              />
+            ))}
+            <button
+              onClick={onAdd}
+              className="w-full py-2 bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 font-bold rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add {title.slice(0, -1)}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// BROWSE PAGE
+// ============================================================================
+
+function BrowsePage({ worlds, users, setCurrentPage }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState('All');
+  const [sortBy, setSortBy] = useState('recent');
+
+  const publicWorlds = Object.values(worlds).filter(w => w.isPublic);
+  const filtered = publicWorlds
+    .filter(w =>
+      (selectedGenre === 'All' || w.genre === selectedGenre) &&
+      w.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'recent') return new Date(b.createdDate) - new Date(a.createdDate);
+      if (sortBy === 'popular') return b.views - a.views;
+      if (sortBy === 'rated') {
+        const aRating = a.ratings.length > 0 ? a.ratings.reduce((s, r) => s + r.rating, 0) / a.ratings.length : 0;
+        const bRating = b.ratings.length > 0 ? b.ratings.reduce((s, r) => s + r.rating, 0) / b.ratings.length : 0;
+        return bRating - aRating;
+      }
+      return 0;
+    });
+
+  const genres = ['All', ...new Set(publicWorlds.map(w => w.genre))];
+
+  return (
+    <div className="space-y-8 fade-in">
+      <h1 className="text-5xl font-bold display-font">Explore Worlds</h1>
+
+      {/* Search & Filters */}
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search worlds..."
+            className="w-full pl-12 pr-4 py-3 rounded-lg input-field text-white placeholder-slate-500"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <select
+            value={selectedGenre}
+            onChange={(e) => setSelectedGenre(e.target.value)}
+            className="px-4 py-3 rounded-lg input-field text-white bg-slate-800/50"
+          >
+            {genres.map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-4 py-3 rounded-lg input-field text-white bg-slate-800/50"
+          >
+            <option value="recent">Most Recent</option>
+            <option value="popular">Most Popular</option>
+            <option value="rated">Highest Rated</option>
+          </select>
+        </div>
+      </div>
+
+      {/* World Grid */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <p className="text-xl">No worlds found matching your criteria</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filtered.map(world => {
+            const avgRating = world.ratings.length > 0
+              ? (world.ratings.reduce((sum, r) => sum + r.rating, 0) / world.ratings.length).toFixed(1)
+              : 0;
+
+            return (
+              <div
+                key={world.id}
+                onClick={() => {
+                  localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(world));
+                  setCurrentPage('world_detail');
+                }}
+                className="p-6 rounded-xl bg-slate-800/50 border border-amber-400/20 card-hover cursor-pointer"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <span className="text-5xl">{world.coverImage}</span>
+                  <span className="px-3 py-1 bg-amber-400/20 text-amber-400 rounded-full text-xs font-medium">
+                    {world.genre}
+                  </span>
+                </div>
+                <h3 className="font-bold text-xl mb-2 line-clamp-2">{world.name}</h3>
+                <p className="text-slate-400 text-sm mb-4 line-clamp-2">{world.description}</p>
+                <div className="flex items-center justify-between text-sm text-slate-500">
+                  <span>by {users[world.creator]?.username}</span>
+                  {avgRating > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      {avgRating}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// WORLD CARD COMPONENT
+// ============================================================================
+
+function WorldCard({ world, onView, onEdit, onDelete }) {
+  const avgRating = world.ratings.length > 0
+    ? (world.ratings.reduce((sum, r) => sum + r.rating, 0) / world.ratings.length).toFixed(1)
+    : 0;
+
+  return (
+    <div className="p-6 rounded-xl bg-slate-800/50 border border-amber-400/20 card-hover space-y-4">
+      <div className="flex items-start justify-between">
+        <span className="text-5xl">{world.coverImage}</span>
+        <span className="px-2 py-1 bg-amber-400/20 text-amber-400 rounded text-xs font-medium">
+          {world.genre}
+        </span>
+      </div>
+      <div>
+        <h3 className="font-bold text-lg">{world.name}</h3>
+        <p className="text-slate-400 text-sm line-clamp-2 mt-1">{world.description}</p>
+      </div>
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        <Calendar className="w-4 h-4" />
+        {new Date(world.createdDate).toLocaleDateString()}
+      </div>
+      <div className="flex gap-2 pt-4">
+        <button
+          onClick={onView}
+          className="flex-1 px-3 py-2 bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 font-medium rounded-lg transition text-sm"
+        >
+          View
+        </button>
+        <button
+          onClick={onEdit}
+          className="px-3 py-2 hover:bg-slate-700 rounded-lg transition"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="px-3 py-2 hover:bg-red-500/10 text-red-400 rounded-lg transition"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// PROFILE PAGE
+// ============================================================================
+
+function ProfilePage({ user, worlds, setCurrentUser, setCurrentPage }) {
+  const userWorlds = Object.values(worlds).filter(w => w.creator === user.id);
+
+  return (
+    <div className="space-y-12 fade-in">
+      {/* Profile Header */}
+      <div className="bg-slate-800/50 border border-amber-400/20 rounded-2xl p-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-8">
+          <div className="text-6xl">{user.avatar}</div>
+          <div className="flex-1">
+            <h1 className="text-4xl font-bold display-font mb-2">{user.username}</h1>
+            <p className="text-slate-400 mb-4">{user.bio || 'No bio yet'}</p>
+            <div className="flex flex-wrap gap-6 text-sm text-slate-400">
+              <div>
+                <span className="text-amber-400 font-bold">{userWorlds.length}</span> Worlds Created
+              </div>
+              <div>
+                <span className="text-amber-400 font-bold">0</span> Followers
+              </div>
+              <div>
+                Joined {new Date(user.joinDate).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setCurrentPage('settings')}
+            className="px-6 py-2 btn-primary rounded-lg font-bold flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Edit Profile
+          </button>
+        </div>
+      </div>
+
+      {/* My Worlds */}
+      <div>
+        <h2 className="text-3xl font-bold display-font mb-8">My Worlds ({userWorlds.length})</h2>
+        {userWorlds.length === 0 ? (
+          <div className="text-center py-16 text-slate-400">
+            <p className="text-xl">No worlds yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {userWorlds.map(world => (
+              <div
+                key={world.id}
+                onClick={() => {
+                  localStorage.setItem('worldbuilder_currentWorld', JSON.stringify(world));
+                  setCurrentPage('world_detail');
+                }}
+                className="p-6 rounded-xl bg-slate-800/50 border border-amber-400/20 card-hover cursor-pointer"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <span className="text-4xl">{world.coverImage}</span>
+                  <span className="px-2 py-1 bg-amber-400/20 text-amber-400 rounded text-xs font-medium">
+                    {world.genre}
+                  </span>
+                </div>
+                <h3 className="font-bold text-lg">{world.name}</h3>
+                <p className="text-slate-400 text-sm line-clamp-2 mt-2">{world.description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SETTINGS PAGE
+// ============================================================================
+
+function SettingsPage({ user, setCurrentUser, setCurrentPage, onLogout }) {
+  const [formData, setFormData] = useState({
+    username: user.username,
+    bio: user.bio,
+    email: user.email,
+  });
+
+  const handleSave = () => {
+    const updated = { ...user, ...formData };
+    setCurrentUser(updated);
+    localStorage.setItem('worldbuilder_currentUser', JSON.stringify(updated));
+    alert('Profile updated successfully!');
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-8 fade-in">
+      <h1 className="text-4xl font-bold display-font">Account Settings</h1>
+
+      {/* Profile Settings */}
+      <div className="bg-slate-800/50 border border-amber-400/20 rounded-2xl p-8 space-y-6">
+        <h2 className="text-2xl font-bold">Profile Information</h2>
+
+        <div>
+          <label className="block text-lg font-bold mb-3">Username</label>
+          <input
+            type="text"
+            value={formData.username}
+            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg input-field text-white"
+          />
+        </div>
+
+        <div>
+          <label className="block text-lg font-bold mb-3">Email</label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg input-field text-white"
+          />
+        </div>
+
+        <div>
+          <label className="block text-lg font-bold mb-3">Bio</label>
+          <textarea
+            value={formData.bio}
+            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg input-field text-white h-24 resize-none"
+            placeholder="Tell us about yourself..."
+          />
+        </div>
+
+        <button
+          onClick={handleSave}
+          className="w-full py-3 btn-primary font-bold rounded-lg"
+        >
+          Save Changes
+        </button>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 space-y-4">
+        <h2 className="text-2xl font-bold text-red-400">Danger Zone</h2>
+        <button
+          onClick={() => {
+            if (confirm('Are you sure? This will log you out.')) {
+              onLogout();
+              setCurrentPage('landing');
+            }
+          }}
+          className="w-full py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-lg transition"
+        >
+          Logout
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Placeholder for Calendar icon (since it's not in lucide-react)
+const Calendar = (props) => (
+  <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
